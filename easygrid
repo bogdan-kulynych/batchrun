@@ -44,7 +44,7 @@ def generate_commands(spec_name, program, config):
     commands = []
     for parameter_values in itertools.product(*config.values()):
         args = get_cmd_arg_str(dict(zip(config.keys(), parameter_values)))
-        program_escaped = program.replace('"', '\\"')
+        program_escaped = program.replace("'", "\\'")
         commands.append(
             RUN_CMD_TEMPLATE.format(
                 program=program_escaped,
