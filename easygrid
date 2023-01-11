@@ -187,7 +187,7 @@ def sweep(config_path, mode, log_dir, n_jobs, joblog_filename, parallel_args, si
 
     # Otherwise, assuming the config path is the runfile.
     if log_dir is None:
-        base_log_dir = DEFAULT_LOG_DIR
+        base_log_dir = pathlib.Path.cwd() / DEFAULT_LOG_DIR
 
     log_dir = base_log_dir / spec_name
     pathlib.Path.mkdir(log_dir, parents=True, exist_ok=True)
