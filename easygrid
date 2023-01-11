@@ -2,7 +2,7 @@
 import os
 import sys
 import stat
-import json
+import shlex
 import pathlib
 import hashlib
 import itertools
@@ -17,33 +17,19 @@ except ImportError as e:
     sys.exit(f"Environment is not configured properly: {e}")
 
 
-PROGRAM_NAME = "gridrun"
 SPEC_ERROR_MARKER = "Spec error"
-RUN_CMD_TEMPLATE = "{runner} run {spec_name} '{program}' args='{args}'"
+RUN_CMD_TEMPLATE = "{program} {args}"
 SWEEP_CMD_TEMPLATE = (
-    "cat {runfile}"
-    ' | while read line; do echo "${{line}} --log_dir={log_dir} --mode={mode}"; done'
-    " | parallel --bar -j {n_jobs} {parallel_args}"
+    # Remove commented and empty lines.
+    " grep -o '^[^#]*' {runfile}"
+    # Run using GNU parallel.
+    " | parallel --bar -j {n_jobs} --joblog={joblog_path} {mode_flag} {parallel_args}"
+    # Additional logging for each task.
+    "'{{1}} > {log_dir}/{{#}}.out 2> {log_dir}/{{#}}.err'"
 )
 DEFAULT_LOG_DIR = pathlib.Path("logs")
+DEFAULT_JOBLOG_FILENAME = "joblog.txt"
 RUNFILE_TEMPLATE = "{spec_name}.runfile"
-
-
-def prepare_as_filename(s):
-    """
-    >>> prepare_as_filename("python experiments/run.py")
-    'python__experiments__run__py'
-    """
-    return s.replace("/", "__").replace(" ", "__").replace(".", "__").replace("=", "_")
-
-
-def get_config_summary(kwargs):
-    """
-    >>> get_config_summary({"alpha": 1, "beta": "val"})
-    'alpha_1__beta_val'
-    """
-    pair_strs = [f"{k}={v}" for k, v in kwargs.items()]
-    return prepare_as_filename("__".join(pair_strs))
 
 
 def get_cmd_arg_str(kwargs):
@@ -57,12 +43,10 @@ def get_cmd_arg_str(kwargs):
 def generate_commands(spec_name, program, config):
     commands = []
     for parameter_values in itertools.product(*config.values()):
-        args = json.dumps(dict(zip(config.keys(), parameter_values)))
+        args = get_cmd_arg_str(dict(zip(config.keys(), parameter_values)))
         program_escaped = program.replace('"', '\\"')
         commands.append(
             RUN_CMD_TEMPLATE.format(
-                runner=__file__,
-                spec_name=spec_name,
                 program=program_escaped,
                 args=args,
             )
@@ -147,21 +131,28 @@ def init(
 )
 @click.option(
     "--mode",
-    type=click.Choice(["resume", "overwrite"]),
+    type=click.Choice(["resume", "resume-failed", "retry-failed", "overwrite"]),
     help="How to deal with previous runs.",
     default="resume",
 )
 @click.option(
-    "--log_dir",
-    help="Location for logs.",
-    type=click.Path(exists=False),
-    default=DEFAULT_LOG_DIR,
-)
-@click.option(
     "-j",
     "--n_jobs",
-    help="Number of parallel jobs. By default, executes sequentially.",
+    help="Number of jobs to execute in parallel. By default is one.",
+    type=int,
     default=1,
+)
+@click.option(
+    "--log_dir",
+    help="Location for logs. By default is {DEFAULT_LOG_DIR}/<spec_name>",
+    type=click.Path(exists=False),
+    default=None,
+)
+@click.option(
+    "--joblog_filename",
+    help="Filename for the job log.",
+    type=str,
+    default=DEFAULT_JOBLOG_FILENAME,
 )
 @click.option(
     "--parallel_args", help="Arguments to pass to GNU parallel.", default=None
@@ -169,13 +160,14 @@ def init(
 @click.option(
     "--silent", help="Whether to output messages.", default=False, is_flag=True
 )
-def sweep(config_path, mode, log_dir, n_jobs, parallel_args, silent):
+def sweep(config_path, mode, log_dir, n_jobs, joblog_filename, parallel_args, silent):
     """
     Launch a sweep over a grid for different parameter values.
 
     The commands takes as input a CONFIG_PATH, which is the location of the spec file or the runfile.
     If it is the spec, it first generates a runfile containing the commands which are to be
     executed in parallel. Then, it runs each command from the runfile using GNU parallel.
+    The stem of the CONFIG_PATH is assumed to be the spec name.
     """
     config_path = pathlib.Path(config_path)
     config_ext = config_path.suffix
@@ -183,7 +175,7 @@ def sweep(config_path, mode, log_dir, n_jobs, parallel_args, silent):
     # Assuming the config path is the spec.
     if config_ext.lower() in [".yml", ".yaml"]:
         spec_name = config_path.stem
-        runfile = RUNFILE_TEMPLATE.format(spec_name=spec_name)
+        runfile = pathlib.Path(RUNFILE_TEMPLATE.format(spec_name=spec_name))
         if not silent:
             print(f"Using spec: {config_path}")
             print(f"Generating runfile: {runfile}")
@@ -191,15 +183,30 @@ def sweep(config_path, mode, log_dir, n_jobs, parallel_args, silent):
 
     else:
         runfile = config_path
+        spec_name = runfile.stem
 
     # Otherwise, assuming the config path is the runfile.
+    if log_dir is None:
+        base_log_dir = DEFAULT_LOG_DIR
+
+    log_dir = base_log_dir / spec_name
+    pathlib.Path.mkdir(log_dir, parents=True, exist_ok=True)
+
     parallel_args = parallel_args or ""
+    if mode == "overwrite":
+        mode_flag = ""
+    else:
+        mode_flag = f"--{mode}"
+
     parallel_cmd = SWEEP_CMD_TEMPLATE.format(
+        runner=__file__,
         runfile=runfile,
         n_jobs=n_jobs,
-        parallel_args=parallel_args,
         log_dir=log_dir,
-        mode=mode,
+        joblog_path=log_dir / joblog_filename,
+        spec_name=spec_name,
+        mode_flag=mode_flag,
+        parallel_args=parallel_args,
     )
 
     if not silent:
@@ -212,50 +219,6 @@ def sweep(config_path, mode, log_dir, n_jobs, parallel_args, silent):
         [parallel_cmd],
         shell=True,
     )
-
-
-@cli.command()
-@click.argument("spec_name")
-@click.argument("cmd")
-@click.option(
-    "--args",
-    help="JSON dictionary of arguments passed to the command.",
-    type=str,
-    default="{}",
-)
-@click.option(
-    "--log_dir",
-    help="Directory to write logs.",
-    type=click.Path(exists=False),
-    default=DEFAULT_LOG_DIR,
-)
-@click.option(
-    "--mode",
-    type=click.Choice(["resume", "overwrite"]),
-    help="How to deal with previous runs.",
-    default="resume",
-)
-def run(spec_name, cmd, args, log_dir, mode):
-    """
-    Run command and write logs.
-    """
-    kwargs = json.loads(args)
-    arg_str = get_cmd_arg_str(kwargs)
-    RUN_LOG_DIR = pathlib.Path(log_dir) / spec_name / get_config_summary(kwargs)
-    pathlib.Path.mkdir(RUN_LOG_DIR, parents=True, exist_ok=True)
-    status_sentinel_path = RUN_LOG_DIR / "status.txt"
-
-    if not status_sentinel_path.exists() or mode == "overwrite":
-        with open(RUN_LOG_DIR / "out.log", "w+") as stdout, open(
-            RUN_LOG_DIR / "err.log", "w+"
-        ) as stderr:
-            retcode = subprocess.call(
-                [f"{cmd} {arg_str}"], shell=True, stdout=stdout, stderr=stderr
-            )
-        with open(status_sentinel_path, "w+") as f:
-            f.writelines(f"{retcode}\n")
-
-        sys.exit(retcode)
 
 
 if __name__ == "__main__":
