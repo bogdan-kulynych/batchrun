@@ -265,6 +265,8 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
                         num_fails += 1
                     progress.set_postfix(dict(fails=num_fails, skipped=num_skipped))
                     progress.update()
+                    continue
+
             job_queue.append(command)
 
     elif mode == "overwrite":
