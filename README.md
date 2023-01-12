@@ -26,9 +26,9 @@ to their hashes, and status information about the jobs.
 
 #### Resuming where we left and adding new jobs
 In the case of shutdown, argmapper will by default resume the jobs which have not finished.
-Similarly, if we add more jobs to the runlist, argmapper will only run the new commands. The way
-argmapper tells if a job has run or not is by the command itself. If it has changed in any way,
-e.g., the order of arguments is changed, runfile will assume it's a new job and will re-run it.
+Similarly, if we add more jobs to the runlist, argmapper will only run the new ones. The way
+argmapper tells if a job is new or not is by the command itself. If the command has changed in any
+way, e.g., the order of arguments is different, argmapper will assume it's a new job.
 
 
 ### Create a parameter sweep
@@ -48,7 +48,7 @@ parameters:
     value: 100
 ```
 
-we can generate a runfile, a list of commands from this grid spec, which will look like this:
+we can generate a list of commands corresponding to all possible parameter value combinations:
 ```bash
 python3 my_script.py --alpha=1 --beta=0.1 --gamma=100
 python3 my_script.py --alpha=1 --beta=0.25 --gamma=100
@@ -63,5 +63,5 @@ by running the following command:
 argmapper sweep gridspec.yml
 ```
 
-The runfile by default will be written to `gridspec.runfile`. You can then launch the sweep using
-the `argmapper launch gridspec.runfile` as detailed before.
+The runfile containing the commands by default will be written to `gridspec.runfile`. You can then
+launch the sweep using the `argmapper launch gridspec.runfile` as detailed before.
