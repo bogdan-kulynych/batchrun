@@ -1,0 +1,6 @@
+python3 sample_script.py --alpha=1 --beta=0.1 --gamma=42
+python3 sample_script.py --alpha=1 --beta=0.25 --gamma=42
+python3 sample_script.py --alpha=1 --beta=0.5 --gamma=42
+python3 sample_script.py --alpha=2 --beta=0.1 --gamma=42
+python3 sample_script.py --alpha=2 --beta=0.25 --gamma=42
+python3 sample_script.py --alpha=2 --beta=0.5 --gamma=42

@@ -1,0 +1,10 @@
+program: python3 sample_script.py
+parameters:
+  alpha:
+    values:
+      - 1
+      - 2
+  beta:
+    values: [0.1, 0.25, 0.5]
+  gamma:
+    value: 42
