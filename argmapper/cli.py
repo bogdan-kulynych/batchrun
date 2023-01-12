@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import os
 import sys
-import stat
 import json
 import time
 import shlex
@@ -24,8 +23,9 @@ except ImportError as e:
 
 SPEC_ERROR_MARKER = "Spec error"
 DEFAULT_ACCOUNTING_DIR = pathlib.Path("runs")
-DEFAULT_STATE_DB_FILENAME = "state.json"
-RUNFILE_TEMPLATE = "{spec_name}.runfile"
+DEFAULT_STATE_DB_FILENAME = "metadata.json"
+DEFAULT_RUNFILE_TEMPLATE = "{spec_name}.runfile"
+RUN_CMD_TEMPLATE = "{program} {args}"
 
 
 def get_cmd_arg_str(kwargs):
@@ -122,18 +122,6 @@ def parse_spec(spec_path):
     return program, config
 
 
-def create_runfile(spec_path, runfile):
-    spec_path = pathlib.Path(spec_path)
-    spec_name = spec_path.stem
-
-    program, config = parse_spec(spec_path)
-    commands = generate_commands(program, config)
-
-    runfile = runfile or RUNFILE_TEMPLATE.format(spec_name=spec_name)
-    with open(runfile, "w+") as f:
-        f.write("\n".join(commands) + "\n")
-
-
 def batch(iterable, n=1):
     # https://stackoverflow.com/questions/8290397/how-to-split-an-iterable-in-constant-size-chunks
     l = len(iterable)
@@ -149,31 +137,39 @@ def cli():
 @cli.command()
 @click.argument("spec", type=click.Path(exists=True))
 @click.option(
-    "--runfile",
+    "--out",
     help="Location for the generated runfile.",
     type=click.Path(exists=False),
     default=None,
 )
-def init(
-    spec,
-    runfile,
-):
+@click.option(
+    "--silent", help="Whether to output messages.", default=False, is_flag=True
+)
+def sweep(spec, out, silent):
     """
-    Initialize a sweep over script parameters in parallel.
+    Create a list of command line jobs sweeping an argument grid.
 
-    The command generates a runfile containing the commands which are to be
-    executed in parallel. Then, it runs each command from the runfile using GNU parallel.
-
-    The command requires a specification YAML file for the search in a format compatible with
-    Weights and Biases sweep config.
+    The command generates a runfile containing the commands which are to be executed in parallel.
+    It requires a SPEC file in YAML.
     """
-    create_runfile(spec, runfile)
+    spec_path = pathlib.Path(spec)
+    spec_name = spec_path.stem
+
+    program, config = parse_spec(spec_path)
+    commands = generate_commands(program, config)
+
+    out = out or DEFAULT_RUNFILE_TEMPLATE.format(spec_name=spec_name)
+    with open(out, "w+") as f:
+        f.write("\n".join(commands) + "\n")
+
+    if not silent:
+        print(f"Runfile generated: {out}")
 
 
 @cli.command()
 @click.argument(
-    "config_path",
-    type=click.Path(exists=False),
+    "runfile",
+    type=click.Path(exists=True),
 )
 @click.option(
     "--mode",
@@ -203,36 +199,30 @@ def init(
 @click.option(
     "--silent", help="Whether to output messages.", default=False, is_flag=True
 )
-def run(config_path, mode, n_jobs, accounting_dir, state_db_filename, silent):
+def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
     """
-    Launch a sweep over a grid for different parameter values.
+    Launch, track, and resume command line jobs.
 
-    The commands takes as input a CONFIG_PATH, which is the location of the spec file or the runfile.
-    If it is the spec, it first generates a runfile containing the commands which are to be
-    executed in parallel. Then, it runs each command from the runfile in parallel.
-    The stem of the CONFIG_PATH is assumed to be the spec name.
+    The command takes as input a RUNFILE containing the commands which are to be executed in
+    parallel, line by line. The stem of the RUNFILE is assumed to be the name of the launch
+    by default.
     """
-    config_path = pathlib.Path(config_path)
-    config_ext = config_path.suffix
+    runfile = pathlib.Path(runfile)
+    runfile_ext = runfile.suffix
+    spec_name = runfile.stem
 
-    # Assuming the config path is the spec.
-    if config_ext.lower() in [".yml", ".yaml"]:
-        spec_name = config_path.stem
-        runfile = pathlib.Path(RUNFILE_TEMPLATE.format(spec_name=spec_name))
-        if not silent:
-            print(f"Using spec: {config_path}")
-            print(f"Generating runfile: {runfile}")
-        create_runfile(config_path, runfile=runfile)
+    # If the runfile is YAML-formatted, assuming it is the grid specification by mistake.
+    if runfile_ext.lower() in [".yml", ".yaml"]:
+        raise ValueError(
+            f"Have you provided the grid spec instead of the runfile? "
+            f"Generate the runfile first using the sweep command."
+        )
 
-    else:
-        runfile = config_path
-        spec_name = runfile.stem
-
-    # Otherwise, assuming the config path is the runfile.
     if accounting_dir is None:
         base_accounting_dir = pathlib.Path.cwd() / DEFAULT_ACCOUNTING_DIR
+        accounting_dir = base_accounting_dir / spec_name
 
-    accounting_dir = base_accounting_dir / spec_name
+    accounting_dir = pathlib.Path(accounting_dir)
     log_dir = accounting_dir / "logs"
     pathlib.Path.mkdir(accounting_dir, parents=True, exist_ok=True)
 

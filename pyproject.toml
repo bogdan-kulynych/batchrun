@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=65.0", "tqdm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argmapper"
+version = "0.0.2"
+authors = [
+    { name = "Bogdan Kulynych", email = "bogdan@kulyny.ch" },
+]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+description = "A simple workflow for executing scripts in parallel with varying argument values"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Linux",
+]
+dependencies = [
+  "PyYAML >= 6.0.0",
+  "click >= 8.1.3",
+  "joblib >= 1.1.0",
+  "tqdm >= 4.64",
+]
+
+[project.optional-dependencies]
+dev = ["pytest >= 6.0", "black"]
+
+[project.scripts]
+argmapper = "argmapper.cli:cli"
+
+[tool.setuptools]
+packages = ["argmapper"]
+
+[tool.pytest.ini_options]
+addopts = ["--doctest-modules"]
+testpaths = ["argmapper", "tests"]
