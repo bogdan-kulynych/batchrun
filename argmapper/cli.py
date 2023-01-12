@@ -251,6 +251,7 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
     # Restore or initialize state.
     job_queue = []
     num_fails = 0
+    num_skipped = 0
     progress = tqdm.tqdm(total=len(commands), ascii=True)
 
     if mode == "resume":
@@ -258,12 +259,12 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
             h = cmd_hash(command)
             if h in state_db:
                 status = state_db[h].get("status")
+                num_skipped += 1
                 if status is not None:
                     if status != 0:
                         num_fails += 1
-                    progress.set_postfix(dict(fails=num_fails))
+                    progress.set_postfix(dict(fails=num_fails, skipped=num_skipped))
                     progress.update()
-                    continue
             job_queue.append(command)
 
     elif mode == "overwrite":
@@ -292,7 +293,7 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
             progress.set_description(
                 ", ".join(f"{k}={v}" for k, v in last_parameters.items())
             )
-            progress.set_postfix(dict(fails=num_fails))
+            progress.set_postfix(dict(fails=num_fails, skipped=num_skipped))
             progress.update(n_jobs)
 
             with open(state_db_path, "w+") as f:
