@@ -16,7 +16,11 @@ try:
     import click
     import joblib
 
-    from tqdm import autonotebook as tqdm
+    from rich import print
+    from rich.panel import Panel
+    from rich.live import Live
+    from rich.progress import Progress
+
 except ImportError as e:
     sys.exit(f"Environment is not configured properly: {e}")
 
@@ -54,29 +58,49 @@ def cmd_hash(cmd):
     return hashlib.sha256(cmd.encode()).hexdigest()[:16]
 
 
-def exec_job(cmd, log_dir):
-    parameters = parse_args(cmd)
-    h = cmd_hash(cmd)
-    job_log_path = log_dir / h
-    pathlib.Path.mkdir(job_log_path, parents=True, exist_ok=True)
-    with open(job_log_path / "out.log", "w+") as out, open(
-        job_log_path / "err.log", "w+"
-    ) as err:
+def exec_job(command, stdout_path, stderr_path):
+    parameters = parse_args(command)
+
+    with open(stdout_path, "w+") as out, open(stderr_path, "w+") as err:
         start = time.time()
         retcode = subprocess.call(
-            [cmd],
+            [command],
             shell=True,
             stdout=out,
             stderr=err,
         )
-    end = time.time()
+        end = time.time()
+
     return dict(
         start=start,
         runtime=end - start,
         status=retcode,
-        command=cmd,
+        command=command,
         parameters=parameters,
     )
+
+
+def schedule_jobs(job_batch, log_dir, progress):
+    for command in job_batch:
+        h = cmd_hash(command)
+        job_log_path = log_dir / h
+        pathlib.Path.mkdir(job_log_path, parents=True, exist_ok=True)
+
+        stdout_path = job_log_path / "out.log"
+        stderr_path = job_log_path / "err.log"
+
+        progress.log(f"{h}: {command}")
+        progress.log(
+            Panel(
+                "\n".join(
+                    [
+                        f"{h}: tail -f {stdout_path}",
+                        f"{h}: tail -f {stderr_path}",
+                    ]
+                )
+            )
+        )
+        yield joblib.delayed(exec_job)(command, stdout_path, stderr_path)
 
 
 def generate_commands(program, config):
@@ -142,10 +166,7 @@ def cli():
     type=click.Path(exists=False),
     default=None,
 )
-@click.option(
-    "--silent", help="Whether to output messages.", default=False, is_flag=True
-)
-def sweep(spec, out, silent):
+def sweep(spec, out):
     """
     Create a list of command line jobs sweeping an argument grid.
 
@@ -162,8 +183,7 @@ def sweep(spec, out, silent):
     with open(out, "w+") as f:
         f.write("\n".join(commands) + "\n")
 
-    if not silent:
-        print(f"Runfile generated: {out}")
+    print(f"Runfile generated: {out}")
 
 
 @cli.command()
@@ -196,10 +216,7 @@ def sweep(spec, out, silent):
     type=str,
     default=DEFAULT_STATE_DB_FILENAME,
 )
-@click.option(
-    "--silent", help="Whether to output messages.", default=False, is_flag=True
-)
-def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
+def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename):
     """
     Launch, track, and resume command line jobs.
 
@@ -242,32 +259,33 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
             if line != "\n" and not line.startswith("#")
         ]
 
-    if not silent:
-        print(f"Starting sweep from runfile: {runfile}")
-        print(f"Accounting in directory: {accounting_dir}")
-        print(f"Mode: {mode}")
-        print(f"Number of jobs: {n_jobs}")
+    print(f"Starting sweep from runfile: {runfile}")
+    print(f"Accounting in directory: {accounting_dir}")
+    print(f"Mode: {mode}")
+    print(f"Number of parallel jobs: {n_jobs}")
 
     # Restore or initialize state.
     job_queue = []
     num_fails = 0
     num_skipped = 0
-    progress = tqdm.tqdm(total=len(commands), ascii=True)
 
-    if mode == "resume":
+    if mode in ["resume", "retry_failed"]:
         for command in commands:
             h = cmd_hash(command)
+            resuming = False
             if h in state_db:
                 status = state_db[h].get("status")
-                num_skipped += 1
                 if status is not None:
+                    if status == 0:
+                        num_skipped += 1
                     if status != 0:
                         num_fails += 1
-                    progress.set_postfix(dict(fails=num_fails, skipped=num_skipped))
-                    progress.update()
-                    continue
-
-            job_queue.append(command)
+                        if mode == "resume":
+                            num_skipped += 1
+                        elif mode == "retry_failed":
+                            job_queue.append(command)
+            else:
+                job_queue.append(command)
 
     elif mode == "overwrite":
         job_queue = commands
@@ -275,33 +293,32 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename, silent):
         raise ValueError(f"Unknown mode: {mode}")
 
     # Execute the jobs.
-    with joblib.Parallel(n_jobs=n_jobs) as parallel:
-        for job_batch in batch(job_queue, n_jobs):
-            results = parallel(
-                joblib.delayed(exec_job)(
-                    command,
-                    log_dir,
+    progress = Progress(auto_refresh=False)
+    task_indicator = progress.add_task("", total=len(commands))
+    progress.update(task_indicator, advance=num_skipped)
+
+    with progress:
+        with joblib.Parallel(n_jobs=n_jobs) as parallel:
+            for job_batch in batch(job_queue, n_jobs):
+                results = parallel(
+                    delayed_job
+                    for delayed_job in schedule_jobs(job_batch, log_dir, progress)
                 )
-                for command in job_batch
-            )
 
-            for result in results:
-                h = cmd_hash(result["command"])
-                state_db[h] = result
-                if result["status"] != 0:
-                    num_fails += 1
+                progress.update(task_indicator, advance=len(job_batch), refresh=True)
+                for result in results:
+                    h = cmd_hash(result["command"])
+                    state_db[h] = result
 
-            last_parameters = result["parameters"]
-            progress.set_description(
-                ", ".join(f"{k}={v}" for k, v in last_parameters.items())
-            )
-            progress.set_postfix(dict(fails=num_fails, skipped=num_skipped))
-            progress.update(n_jobs)
+                    retcode = result["status"]
+                    if retcode != 0:
+                        num_fails += 1
+                        progress.log(f"[bold red]{h}: Failed")
+                    else:
+                        progress.log(f"[bold]{h}: Success")
 
-            with open(state_db_path, "w+") as f:
-                json.dump(state_db, f, indent=2)
-
-    progress.close()
+                with open(state_db_path, "w+") as f:
+                    json.dump(state_db, f, indent=2)
 
 
 if __name__ == "__main__":

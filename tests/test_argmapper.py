@@ -20,17 +20,13 @@ LAUNCH_FIXTURES = ["normal"]
         for fixture_name in SWEEP_FIXTURES
     ],
 )
-@pytest.mark.parametrize("silent", [False, True])
-def test_sweep(tmp_path_factory, grid_spec, expected_runfile, silent):
+def test_sweep(tmp_path_factory, grid_spec, expected_runfile):
     out_path = tmp_path_factory.mktemp("runs") / "runfile"
     args = f"{grid_spec} --out {out_path}"
-    if silent:
-        args += " --silent "
     res = runner.invoke(cli.sweep, args)
 
     assert res.exit_code == 0
     expected_text_in_output = "Runfile generated" in res.output
-    assert silent == (not expected_text_in_output)
 
     with open(expected_runfile) as f:
         expected_runfile_content = f.read()
@@ -41,10 +37,8 @@ def test_sweep(tmp_path_factory, grid_spec, expected_runfile, silent):
     assert generated_runfile_content == expected_runfile_content
 
 
-def launch(runfile, accounting_dir, silent):
+def launch(runfile, accounting_dir):
     args = f"{runfile} --accounting_dir={str(accounting_dir)}"
-    if silent:
-        args += " --silent "
     print(args)
     return runner.invoke(cli.launch, args)
 
@@ -53,15 +47,13 @@ def launch(runfile, accounting_dir, silent):
     "spec_name",
     LAUNCH_FIXTURES,
 )
-@pytest.mark.parametrize("silent", [False, True])
-def test_launch_custom_accounting_files(tmp_path_factory, spec_name, silent):
+def test_launch_custom_accounting_files(tmp_path_factory, spec_name):
     runfile = fixtures_dir / f"{spec_name}.runfile"
     accounting_dir = tmp_path_factory.mktemp("runs")
 
-    res = launch(runfile, accounting_dir, silent)
+    res = launch(runfile, accounting_dir)
     assert res.exit_code == 0
     expected_text_in_output = "Starting sweep from runfile" in res.output
-    assert silent == (not expected_text_in_output)
 
     logs_dir = accounting_dir / "logs"
     assert logs_dir.exists()
