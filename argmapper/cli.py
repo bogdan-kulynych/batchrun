@@ -101,14 +101,15 @@ def schedule_jobs(job_batch, log_dir, progress):
         stderr_path = job_log_path / "err.log"
 
         progress.log(f"{h}: {command}")
-        progress.log(
+        progress.console.print(
             Panel(
                 "\n".join(
                     [
-                        f"{h}: tail -f {stdout_path}",
-                        f"{h}: tail -f {stderr_path}",
+                        f"tail -f {stdout_path}",
+                        f"tail -f {stderr_path}",
                     ]
-                )
+                ),
+                title=h,
             )
         )
         yield joblib.delayed(exec_job)(command, stdout_path, stderr_path)
@@ -280,10 +281,12 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename):
 
                     retcode = result["status"]
                     if retcode != 0:
-                        num_fails += 1
                         progress.log(f"[bold red]{h}: Failed")
                     else:
                         progress.log(f"[bold]{h}: Success")
+
+                    if retcode != 0:
+                        num_fails += 1
 
                 with open(state_db_path, "w+") as f:
                     json.dump(state_db, f, indent=2)
