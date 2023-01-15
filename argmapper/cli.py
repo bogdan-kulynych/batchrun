@@ -11,21 +11,17 @@ import subprocess
 
 from typing import Optional
 
-try:
-    import yaml
-    import click
-    import joblib
+import click
+import joblib
 
-    from rich import print
-    from rich.panel import Panel
-    from rich.live import Live
-    from rich.progress import Progress
+from rich import print
+from rich.panel import Panel
+from rich.live import Live
+from rich.progress import Progress
 
-except ImportError as e:
-    sys.exit(f"Environment is not configured properly: {e}")
+from .lib import parse_spec
 
 
-SPEC_ERROR_MARKER = "Spec error"
 DEFAULT_ACCOUNTING_DIR = pathlib.Path("runs")
 DEFAULT_STATE_DB_FILENAME = "metadata.json"
 DEFAULT_RUNFILE_TEMPLATE = "{spec_name}.runfile"
@@ -38,6 +34,21 @@ def get_cmd_arg_str(kwargs):
     '--alpha=1 --beta=val'
     """
     return " ".join(f"--{k}={v}" for k, v in kwargs.items())
+
+
+def generate_commands(program, config):
+    commands = []
+    for parameter_values in itertools.product(*config.values()):
+        args = get_cmd_arg_str(dict(zip(config.keys(), parameter_values)))
+        program_escaped = program.replace("'", "\\'")
+        commands.append(
+            RUN_CMD_TEMPLATE.format(
+                program=program_escaped,
+                args=args,
+            )
+        )
+
+    return commands
 
 
 def parse_args(cmd):
@@ -103,49 +114,6 @@ def schedule_jobs(job_batch, log_dir, progress):
         yield joblib.delayed(exec_job)(command, stdout_path, stderr_path)
 
 
-def generate_commands(program, config):
-    commands = []
-    for parameter_values in itertools.product(*config.values()):
-        args = get_cmd_arg_str(dict(zip(config.keys(), parameter_values)))
-        program_escaped = program.replace("'", "\\'")
-        commands.append(
-            RUN_CMD_TEMPLATE.format(
-                program=program_escaped,
-                args=args,
-            )
-        )
-
-    return commands
-
-
-def parse_spec(spec_path):
-    """
-    Parse specification from a YAML file.
-    """
-    with open(spec_path, "r") as f:
-        spec = yaml.safe_load(f)
-
-    try:
-        program = spec["program"]
-    except KeyError:
-        sys.exit(f"{SPEC_ERROR_MARKER}: executable not specified.")
-
-    try:
-        parameters_spec = spec["parameters"]
-    except KeyError:
-        sys.exit(f"{SPEC_ERROR_MARKER}: parameters not specified.")
-    config = {}
-    for parameter_name, parameter_section in parameters_spec.items():
-        parameter_values = parameter_section.get("values")
-        parameter_value = parameter_section.get("value")
-        if parameter_values:
-            config[parameter_name] = parameter_values
-        elif parameter_value:
-            config[parameter_name] = [parameter_value]
-
-    return program, config
-
-
 def batch(iterable, n=1):
     # https://stackoverflow.com/questions/8290397/how-to-split-an-iterable-in-constant-size-chunks
     l = len(iterable)
@@ -176,8 +144,8 @@ def sweep(spec, out):
     spec_path = pathlib.Path(spec)
     spec_name = spec_path.stem
 
-    program, config = parse_spec(spec_path)
-    commands = generate_commands(program, config)
+    spec = parse_spec(spec_path)
+    commands = generate_commands(spec.program, spec.parameters)
 
     out = out or DEFAULT_RUNFILE_TEMPLATE.format(spec_name=spec_name)
     with open(out, "w+") as f:
