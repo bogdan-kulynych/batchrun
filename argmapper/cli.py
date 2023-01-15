@@ -6,7 +6,6 @@ import time
 import shlex
 import pathlib
 import hashlib
-import itertools
 import subprocess
 
 from typing import Optional
@@ -36,11 +35,11 @@ def get_cmd_arg_str(kwargs):
     return " ".join(f"--{k}={v}" for k, v in kwargs.items())
 
 
-def generate_commands(program, config):
+def generate_commands(spec):
     commands = []
-    for parameter_values in itertools.product(*config.values()):
-        args = get_cmd_arg_str(dict(zip(config.keys(), parameter_values)))
-        program_escaped = program.replace("'", "\\'")
+    for parameters in spec.expand():
+        args = get_cmd_arg_str(parameters)
+        program_escaped = spec.program.replace("'", "\\'")
         commands.append(
             RUN_CMD_TEMPLATE.format(
                 program=program_escaped,
@@ -146,7 +145,7 @@ def sweep(spec, out):
     spec_name = spec_path.stem
 
     spec = parse_spec(spec_path)
-    commands = generate_commands(spec.program, spec.parameters)
+    commands = generate_commands(spec)
 
     out = out or DEFAULT_RUNFILE_TEMPLATE.format(spec_name=spec_name)
     with open(out, "w+") as f:

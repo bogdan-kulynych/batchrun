@@ -1,5 +1,6 @@
 import sys
 import yaml
+import itertools
 
 from dataclasses import dataclass
 
@@ -14,8 +15,15 @@ class GridSpec:
     program: str
     parameters: dict
 
+    def expand(self) -> dict:
+        """
+        Iterate over the product of possible parameter values.
+        """
+        for parameter_values in itertools.product(*self.parameters.values()):
+            yield dict(zip(self.parameters.keys(), parameter_values))
 
-def parse_spec(spec_path):
+
+def parse_spec(spec_path: str) -> GridSpec:
     """
     Parse grid specification from a YAML file.
     """
