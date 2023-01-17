@@ -161,7 +161,7 @@ def sweep(spec, out):
 )
 @click.option(
     "--mode",
-    type=click.Choice(["resume", "overwrite"]),
+    type=click.Choice(["resume", "overwrite", "retry_failed"]),
     help="How to deal with previous runs.",
     default="resume",
 )
