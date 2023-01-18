@@ -44,9 +44,23 @@ def parse_spec(spec_path: str) -> GridSpec:
     for parameter_name, parameter_section in parameters_spec.items():
         parameter_values = parameter_section.get("values")
         parameter_value = parameter_section.get("value")
+        parameter_max = parameter_section.get("max")
+        parameter_min = parameter_section.get("min")
+        parameter_step = parameter_section.get("step")
         if parameter_values:
             spec.parameters[parameter_name] = parameter_values
         elif parameter_value:
             spec.parameters[parameter_name] = [parameter_value]
+        elif parameter_max:
+            if parameter_min is not None and parameter_step is not None:
+                spec.parameters[parameter_name] = list(
+                    range(parameter_min, parameter_max, parameter_step)
+                )
+            elif parameter_min is not None:
+                spec.parameters[parameter_name] = list(
+                    range(parameter_min, parameter_max)
+                )
+            else:
+                spec.parameters[parameter_name] = list(range(parameter_max))
 
     return spec

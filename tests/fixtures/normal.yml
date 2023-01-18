@@ -8,3 +8,5 @@ parameters:
     values: [0.1, 0.25, 0.5]
   gamma:
     value: 42
+  delta:
+    max: 2
