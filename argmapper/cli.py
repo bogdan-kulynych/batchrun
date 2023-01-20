@@ -12,11 +12,19 @@ from typing import Optional
 
 import click
 import joblib
+import rich
 
 from rich import print
 from rich.panel import Panel
 from rich.live import Live
-from rich.progress import Progress
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeRemainingColumn,
+)
 
 from .lib import parse_spec
 
@@ -261,7 +269,15 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename):
         raise ValueError(f"Unknown mode: {mode}")
 
     # Execute the jobs.
-    progress = Progress(auto_refresh=False)
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        auto_refresh=True,
+    )
+
     task_indicator = progress.add_task("", total=len(commands))
     progress.update(task_indicator, advance=num_skipped)
 
