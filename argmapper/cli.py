@@ -60,15 +60,19 @@ def generate_commands(spec):
 
 def parse_args(cmd):
     """
-    >>> parse_args("python3 script.py --alpha=1 --beta=val")
-    {'alpha': '1', 'beta': 'val'}
+    >>> parse_args("python3 script.py --alpha=1 --beta=beta_val --flag")
+    {'alpha': '1', 'beta': 'beta_val', 'flag': True}
     """
     kwargs = {}
-    for token in shlex.split(cmd):
-        if token.startswith("-"):
-            k, v = token.split("=")
-            k = k.lstrip("-")
-            kwargs[k] = v
+    lexer = shlex.shlex(cmd, posix=True)
+    lexer.whitespace_split = True
+    for token in lexer:
+        if token.startswith("--"):
+            key_value = token.split("=")
+            key = key_value[0].lstrip("--")
+            value = key_value[1] if len(key_value) > 1 else True
+            kwargs[key] = value
+
     return kwargs
 
 
