@@ -1,38 +1,29 @@
-[build-system]
-requires = ["setuptools>=65.0", "tqdm"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "batchrun"
 version = "0.0.12"
-authors = [
-    { name = "Bogdan Kulynych", email = "bogdan@kulyny.ch" },
-]
-license = { text = "MIT" }
-requires-python = ">=3.8"
 description = "A simple workflow for executing scripts in parallel with varying argument values"
+authors = ["Bogdan Kulynych <bogdan@kulyny.ch>"]
+license = "MIT"
 readme = "README.md"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: Linux",
-]
-dependencies = [
-  "PyYAML >= 6.0.0",
-  "click >= 8.1.3",
-  "joblib >= 1.1.0",
-  "rich >= 13.0.0",
-]
 
-[project.optional-dependencies]
-dev = ["pytest >= 6.0", "black"]
+[tool.poetry.dependencies]
+python = "^3.10"
+PyYAML = ">=6.0.0"
+click = ">=8.1.3"
+joblib = ">=1.1.0"
+rich = "13.0.0"
 
-[project.scripts]
+[tool.poetry.dev-dependencies]
+pytest = ">=6.0"
+black = "*"
+
+[tool.poetry.scripts]
 batchrun = "batchrun.cli:cli"
-
-[tool.setuptools]
-packages = ["batchrun"]
 
 [tool.pytest.ini_options]
 addopts = ["--doctest-modules"]
 testpaths = ["batchrun", "tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
