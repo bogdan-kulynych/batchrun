@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "batchrun"
-version = "0.0.12"
+version = "0.0.13"
 description = "A simple workflow for executing scripts in parallel with varying argument values"
 authors = ["Bogdan Kulynych <bogdan@kulyny.ch>"]
 license = "MIT"
