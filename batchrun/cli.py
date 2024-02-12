@@ -26,7 +26,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from .lib import parse_spec
+from .spec import parse_spec
 
 
 DEFAULT_ACCOUNTING_DIR = pathlib.Path("runs")
@@ -148,7 +148,7 @@ def cli():
 )
 def sweep(spec, out):
     """
-    Create a list of command line jobs sweeping an argument grid.
+    Create a list of jobs sweeping an argument grid.
 
     The command generates a runfile containing the commands which are to be executed in parallel.
     It requires a SPEC file in YAML.
@@ -198,7 +198,7 @@ def sweep(spec, out):
 )
 def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename):
     """
-    Launch, track, and resume command line jobs.
+    Launch, track, and resume jobs.
 
     The command takes as input a RUNFILE containing the commands which are to be executed in
     parallel, line by line. The stem of the RUNFILE is assumed to be the name of the launch
@@ -239,7 +239,7 @@ def launch(runfile, mode, n_jobs, accounting_dir, state_db_filename):
             if line != "\n" and not line.startswith("#")
         ]
 
-    print(f"Starting sweep from runfile: {runfile}")
+    print(f"Launching jobs from runfile: {runfile}")
     print(f"Accounting in directory: {accounting_dir}")
     print(f"Mode: {mode}")
     print(f"Number of parallel jobs: {n_jobs}")

@@ -3,8 +3,8 @@ requires = ["setuptools>=65.0", "tqdm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "argmapper"
-version = "0.0.11"
+name = "batchrun"
+version = "0.0.12"
 authors = [
     { name = "Bogdan Kulynych", email = "bogdan@kulyny.ch" },
 ]
@@ -28,11 +28,11 @@ dependencies = [
 dev = ["pytest >= 6.0", "black"]
 
 [project.scripts]
-argmapper = "argmapper.cli:cli"
+batchrun = "batchrun.cli:cli"
 
 [tool.setuptools]
-packages = ["argmapper"]
+packages = ["batchrun"]
 
 [tool.pytest.ini_options]
 addopts = ["--doctest-modules"]
-testpaths = ["argmapper", "tests"]
+testpaths = ["batchrun", "tests"]
