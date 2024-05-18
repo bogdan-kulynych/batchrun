@@ -1,3 +1,4 @@
+import re
 import sys
 import yaml
 import itertools
@@ -23,6 +24,18 @@ class GridSpec:
             yield dict(zip(self.parameters.keys(), parameter_values))
 
 
+def process_program_string(program: str) -> str:
+    """
+    Strip multiline characters and collapse whitespace.
+    """
+    # Strip multilines.
+    program = program.replace("\n", " ").replace("\\", "")
+
+    # Collapse multiple spaces into one.
+    program = re.sub(r"\s+", " ", program)
+    return program.strip()
+
+
 def parse_spec(spec_path: str) -> GridSpec:
     """
     Parse grid specification from a YAML file.
@@ -31,7 +44,7 @@ def parse_spec(spec_path: str) -> GridSpec:
         spec = yaml.safe_load(f)
 
     try:
-        program = spec["program"]
+        program = process_program_string(spec["program"])
     except KeyError:
         sys.exit(f"{SPEC_ERROR_MARKER}: executable not specified.")
 

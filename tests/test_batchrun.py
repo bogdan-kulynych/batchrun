@@ -4,14 +4,29 @@ import pathlib
 import json
 from click.testing import CliRunner
 
+from batchrun import spec
 from batchrun import cli
 
 runner = CliRunner()
 fixtures_dir = pathlib.Path(__file__).parent.absolute() / "fixtures"
 
 
-SWEEP_FIXTURES = ["normal"]
-LAUNCH_FIXTURES = ["normal"]
+SWEEP_FIXTURES = ["normal", "multiline"]
+LAUNCH_FIXTURES = ["normal", "multiline"]
+
+
+def test_process_program_str():
+    assert spec.process_program_string("simple") == "simple"
+    assert (
+        spec.process_program_string(
+            """
+              python script.py \
+                --flag 1   \
+                --flag 2
+            """
+        )
+        == "python script.py --flag 1 --flag 2"
+    )
 
 
 @pytest.mark.parametrize(

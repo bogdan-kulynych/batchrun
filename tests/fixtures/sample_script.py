@@ -3,4 +3,4 @@ import time
 import random
 
 print(sys.argv)
-time.sleep(2)
+time.sleep(0.1)
